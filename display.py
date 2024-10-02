@@ -13,7 +13,8 @@ pprint = pp.pprint
 class Display:
     """
     Class to visualize datasets from an HDF5 file, with interactive controls for dataset selection, 
-    scale adjustments (linear/log), and saving the displayed data as TIFF images.
+    scale adjustments (linear/log), data smoothing, x/y axis limits, and saving the displayed data as TIFF images.
+    The cropped/smoothed data can be accessed in the property "data", the rawdata is available in the private property "_data".
 
     Parameters:
     ----------
@@ -26,7 +27,7 @@ class Display:
     **kwargs : dict, optional
         Additional keyword arguments to customize behavior:
         - figsize : tuple, optional
-            The size of the figure.
+            The size of the figure for plotting. Defaults to None.
         - scale : str, optional
             The initial color scale for the plot ('linear' or 'log'). Defaults to 'linear'.
         - vmin : float, optional
@@ -34,13 +35,17 @@ class Display:
         - vmax : float, optional
             The initial maximum value for the color scale.
         - xlim : tuple, optional
-            Limits for the x-axis, e.g., (0, 100).
+            Limits for the x-axis in the plot, e.g., (0, 100).
         - ylim : tuple, optional
-            Limits for the y-axis, e.g., (0, 100).
+            Limits for the y-axis in the plot, e.g., (0, 100).
+        - aspect : str, optional
+            Aspect ratio of the plot (e.g., 'equal'). Defaults to 'equal'.
         - save_tiffs : bool, optional
             If True, saves the current dataset display as a TIFF file. Defaults to False.
         - smooth : float, optional
-            To smooth the data before plotting.
+            Standard deviation for Gaussian smoothing of the data. Defaults to 0 (no smoothing).
+        - shotsheet : object, optional
+            A shotsheet object for retrieving and displaying run metadata.
     """
     def __init__(self, 
                  dataset='alvium_nf_ff', 
@@ -61,7 +66,7 @@ class Display:
 
         # Load initial dataset
         self.dataset_key = dataset
-        self.data = self.load_data(self.dataset_key)
+        self._data = self.load_data(self.dataset_key)
 
         # Set up widgets and plot
         self.init_widgets()
@@ -99,18 +104,18 @@ class Display:
             description = "Smooth"
         )
 
-        data = gaussian_filter(self.data,self.smooth.value)
+        data = gaussian_filter(self._data,self.smooth.value)
         m = data.min()
         M = data.max()
         
         def v_value(direction="min",vmin=-1e99,vmax=1e99):
             # Extract xlim and ylim from kwargs, if present
-            xlim = self.kwargs.get('xlim', (0, self.data.shape[1]))  # Default to the full x-range
-            ylim = self.kwargs.get('ylim', (0, self.data.shape[0]))  # Default to the full y-range
+            xlim = self.kwargs.get('xlim', (0, self._data.shape[1]))  # Default to the full x-range
+            ylim = self.kwargs.get('ylim', (0, self._data.shape[0]))  # Default to the full y-range
 
             # Ensure the xlim and ylim are within bounds
-            x_min, x_max = max(0, xlim[0]), min(self.data.shape[1], xlim[1])
-            y_min, y_max = max(0, ylim[0]), min(self.data.shape[0], ylim[1])
+            x_min, x_max = max(0, xlim[0]), min(self._data.shape[1], xlim[1])
+            y_min, y_max = max(0, ylim[0]), min(self._data.shape[0], ylim[1])
 
             # Calculate the min value within the specified xlim and ylim range
             data_subset = data[y_min:y_max, x_min:x_max]
@@ -228,11 +233,13 @@ class Display:
         self.ax.clear()  # Clear the plot
 
         # Define the normalization based on the selected scale
+        data = gaussian_filter(self._data,self.smooth.value)
         if scale == 'log':
-            im = self.ax.imshow(gaussian_filter(self.data,self.smooth.value), cmap='inferno', norm=LogNorm(vmin=vmin, vmax=vmax), aspect=self.kwargs.get("aspect","equal"))
+            im = self.ax.imshow(data, cmap='inferno', norm=LogNorm(vmin=vmin, vmax=vmax), aspect=self.kwargs.get("aspect","equal"))
         else:
-            im = self.ax.imshow(gaussian_filter(self.data,self.smooth.value), cmap='inferno', vmin=vmin, vmax=vmax, aspect=self.kwargs.get("aspect","equal"))
+            im = self.ax.imshow(data, cmap='inferno', vmin=vmin, vmax=vmax, aspect=self.kwargs.get("aspect","equal"))
 
+        self.data = data*1
             
         if "xlim" in self.kwargs: self.ax.set_xlim(self.kwargs["xlim"])
         if "ylim" in self.kwargs: self.ax.set_ylim(self.kwargs["ylim"])
@@ -251,7 +258,7 @@ class Display:
     def update_sliders(self):
         # Update sliders based on the selected scale
         scale = self.scale_selector.value
-        data = self.data
+        data = self._data
         M = data.max()
         m = np.max([data.min(), 1e-6])  # Min value clamped to 1e-6 to avoid log issues
 
@@ -284,7 +291,7 @@ class Display:
             filename = f'tiffs/{self.run_number:04d}_{self.dataset_selector.value}.tiff'
             from pathlib import Path
             Path("tiffs").mkdir(parents=True, exist_ok=True)
-            tifffile.imwrite(filename, self.data.astype(np.float32))
+            tifffile.imwrite(filename, self._data.astype(np.float32))
         
     def on_scale_change(self, change):
         self.update_sliders()
@@ -297,7 +304,7 @@ class Display:
         self.update_plot()
 
     def on_dataset_change(self, change):
-        self.data = self.load_data(change['new'])
+        self._data = self.load_data(change['new'])
         self.update_sliders()
         self.update_plot()
 
