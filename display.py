@@ -16,7 +16,7 @@ class Display:
 
     Parameters:
     ----------
-    dataset_key : str, optional
+    dataset : str, optional
         The default dataset key to be loaded from the HDF5 file. Defaults to 'alvium_nf_ff'.
     run_number : int, optional
         The run number used to construct the HDF5 file path. Defaults to 115.
@@ -57,7 +57,7 @@ class Display:
         self.dataset_keys = [key for key in self.run_data.keys()]
 
         # Load initial dataset
-        self.dataset_key = dataset_key
+        self.dataset_key = dataset
         self.data = self.load_data(self.dataset_key)
 
         # Set up widgets and plot
