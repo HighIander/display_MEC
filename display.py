@@ -40,7 +40,7 @@ class Display:
             If True, saves the current dataset display as a TIFF file. Defaults to False.
     """
     def __init__(self, 
-                 dataset_key='alvium_nf_ff', 
+                 dataset='alvium_nf_ff', 
                  run_number=115, 
                  data_path="/sdf/data/lcls/ds/mec/mecl1038823/hdf5/smalldata/",
                  **kwargs
