@@ -5,6 +5,7 @@ from matplotlib.colors import LogNorm
 from IPython.display import display
 import numpy as np
 import tifffile
+from scipy.ndimage import gaussian_filter
 import pprint
 pp = pprint.PrettyPrinter(indent=4, sort_dicts=False)  # Disable sorting of keys
 pprint = pp.pprint
@@ -38,6 +39,8 @@ class Display:
             Limits for the y-axis, e.g., (0, 100).
         - save_tiffs : bool, optional
             If True, saves the current dataset display as a TIFF file. Defaults to False.
+        - smooth : float, optional
+            To smooth the data before plotting.
     """
     def __init__(self, 
                  dataset='alvium_nf_ff', 
@@ -90,6 +93,16 @@ class Display:
         # Define consistent layout for sliders
         slider_layout = widgets.Layout(width='400px')
 
+        self.smooth = widgets.FloatText(
+            layout=widgets.Layout(width='150px'),
+            value = self.kwargs.get("smooth",0),
+            description = "Smooth"
+        )
+
+        data = gaussian_filter(self.data,self.smooth.value)
+        m = data.min()
+        M = data.max()
+        
         def v_value(direction="min",vmin=-1e99,vmax=1e99):
             # Extract xlim and ylim from kwargs, if present
             xlim = self.kwargs.get('xlim', (0, self.data.shape[1]))  # Default to the full x-range
@@ -100,7 +113,7 @@ class Display:
             y_min, y_max = max(0, ylim[0]), min(self.data.shape[0], ylim[1])
 
             # Calculate the min value within the specified xlim and ylim range
-            data_subset = self.data[y_min:y_max, x_min:x_max]
+            data_subset = data[y_min:y_max, x_min:x_max]
             if direction == "min":
                 v_value = np.max([self.kwargs.get('vmin', data_subset.min()),0.0])
             if direction == "max":
@@ -110,8 +123,8 @@ class Display:
         # Linear sliders for adjusting color scale range (vmin and vmax)
         self.vmin_slider_linear = widgets.FloatSlider(
             value=v_value("min"),
-            min=self.data.min(),
-            max=self.data.max(),
+            min=m,
+            max=M,
             step=0.1,
             description='Vmin:',
             layout=slider_layout
@@ -119,8 +132,8 @@ class Display:
 
         self.vmax_slider_linear = widgets.FloatSlider(
             value=v_value("max"),
-            min=self.data.min(),
-            max=self.data.max(),
+            min=m,
+            max=M,
             step=0.1,
             description='Vmax:',
             layout=slider_layout
@@ -130,8 +143,8 @@ class Display:
         self.vmin_slider_log = widgets.FloatLogSlider(
             value=self.kwargs.get('vmin', v_value("min",vmin=1e-6)),
             base=10,
-            min=np.log10(np.max([self.data.min(), 1e-6])),
-            max=np.log10(self.data.max()),
+            min=np.log10(np.max([m, 1e-6])),
+            max=np.log10(M),
             step=0.1,
             description='Vmin:',
             readout_format='.2e',
@@ -141,8 +154,8 @@ class Display:
         self.vmax_slider_log = widgets.FloatLogSlider(
             value=v_value("max"),
             base=10,
-            min=np.log10(np.max([self.data.min(), 1e-6])),
-            max=np.log10(self.data.max()),
+            min=np.log10(np.max([m, 1e-6])),
+            max=np.log10(M),
             step=0.1,
             description='Vmax:',
             readout_format='.2e',
@@ -153,7 +166,7 @@ class Display:
         self.linear_sliders = widgets.VBox([self.vmin_slider_linear, self.vmax_slider_linear])
         self.log_sliders = widgets.VBox([self.vmin_slider_log, self.vmax_slider_log])
         self.slider_box = widgets.VBox([self.linear_sliders])  # Show linear sliders initially
-        
+                
         self.save_tiffs = widgets.Checkbox(
             description = "save as tiff",
             value = self.kwargs.get("save_tiffs",False)
@@ -189,6 +202,7 @@ class Display:
         self.vmax_slider_linear.observe(self.on_vmax_change, names='value')
         self.vmin_slider_log.observe(self.on_vmin_change, names='value')
         self.vmax_slider_log.observe(self.on_vmax_change, names='value')
+        self.smooth.observe(self.on_smooth_change, names='value')
         self.save_tiffs.observe(self.save_tiff, names='value')
 
     def init_plot(self):
@@ -215,9 +229,9 @@ class Display:
 
         # Define the normalization based on the selected scale
         if scale == 'log':
-            im = self.ax.imshow(self.data, cmap='inferno', norm=LogNorm(vmin=vmin, vmax=vmax), aspect=self.kwargs.get("aspect","equal"))
+            im = self.ax.imshow(gaussian_filter(self.data,self.smooth.value), cmap='inferno', norm=LogNorm(vmin=vmin, vmax=vmax), aspect=self.kwargs.get("aspect","equal"))
         else:
-            im = self.ax.imshow(self.data, cmap='inferno', vmin=vmin, vmax=vmax, aspect=self.kwargs.get("aspect","equal"))
+            im = self.ax.imshow(gaussian_filter(self.data,self.smooth.value), cmap='inferno', vmin=vmin, vmax=vmax, aspect=self.kwargs.get("aspect","equal"))
 
             
         if "xlim" in self.kwargs: self.ax.set_xlim(self.kwargs["xlim"])
@@ -287,9 +301,13 @@ class Display:
         self.update_sliders()
         self.update_plot()
 
+    def on_smooth_change(self, change):
+        self.update_sliders()
+        self.update_plot()
+
     def display(self):
         # Arrange the plot and widgets side by side
-        controls = widgets.VBox([self.dataset_selector, self.scale_selector, self.slider_box,self.save_tiffs, self.output_widget])
+        controls = widgets.VBox([self.dataset_selector, self.scale_selector, self.slider_box,self.smooth,self.save_tiffs, self.output_widget])
         row1 = widgets.HBox([self.fig.canvas, controls])  # Place widgets next to the plot
         display_area = widgets.VBox([row1, self.output_py_widget])
 
