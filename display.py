@@ -164,17 +164,23 @@ class Display:
         )  # Initialize an output widget for print statements
         if "shotsheet" in self.kwargs:
             with self.output_widget:
-                run_number = 1
-                pprint(self.kwargs["shotsheet"].get_all(filter={"run_number":run_number})[run_number])
+                run_number = self.run_number
+                try:
+                    pprint(self.kwargs["shotsheet"].get_all(filter={"run_number":run_number})[run_number])
+                except:
+                    print("Warning! No metadata for this run!")
     
         self.output_py_widget = widgets.Output(
             layout=widgets.Layout(width='800px')
         )  # Initialize an output widget for print statements
         if "shotsheet" in self.kwargs:
             with self.output_py_widget:
-                run_number = 1
+                run_number = self.run_number
                 print("Data in workbook 'Python':'")
-                pprint(self.kwargs["shotsheet"].get_all(filter={"run_number":run_number},python=True)[run_number])
+                try:
+                    pprint(self.kwargs["shotsheet"].get_all(filter={"run_number":run_number},python=True)[run_number])
+                except:
+                    print("Warning! No metadata for this run!")
 
         # Add observers
         self.dataset_selector.observe(self.on_dataset_change, names='value')
